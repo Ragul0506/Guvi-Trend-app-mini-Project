@@ -2,17 +2,10 @@ pipeline {
     agent any
 
     environment {
-        DOCKERHUB_CREDENTIALS = credentials('dockerhub-credentials')
         DOCKER_IMAGE = "sarwanragul/trend-app:latest"
     }
 
     stages {
-        stage('Checkout') {
-            steps {
-                git branch: 'main', url: 'https://github.com/Ragul0506/Guvi-Trend-app-mini-Project.git'
-            }
-        }
-
         stage('Build Docker Image') {
             steps {
                 sh 'docker build -t $DOCKER_IMAGE .'
@@ -30,19 +23,20 @@ pipeline {
 
         stage('Deploy to EKS') {
             steps {
-                sh 'kubectl apply -f terraform-infra/trend-deployment.yaml'
-                sh 'kubectl apply -f terraform-infra/trend-service.yaml'
+                sh 'kubectl apply -f k8s/trend-deployment.yaml'
+                sh 'kubectl apply -f k8s/trend-service.yaml'
             }
         }
     }
 
     post {
-        success {
-            echo '✅ Deployment Successful!'
-        }
         failure {
-            echo '❌ Deployment Failed'
+            echo "❌ Deployment Failed"
+        }
+        success {
+            echo "✅ Deployment Successful"
         }
     }
 }
+
 
