@@ -1,50 +1,56 @@
 pipeline {
     agent any
-
     environment {
-        DOCKER_IMAGE = "sarwanragul/trend-app:latest"
+        DOCKERHUB_CREDENTIALS = credentials('dockerhub-cred-id')
+        IMAGE_NAME = 'trend-app'
     }
-
     stages {
         stage('Checkout') {
             steps {
                 git branch: 'main',
-                    url: 'https://github.com/Vennilavan12/Trend.git'
+                    url: 'https://github.com/Ragul0506/Guvi-Trend-app-mini-Project.git',
+                    credentialsId: 'github-cred-id'
             }
         }
 
         stage('Build Docker Image') {
             steps {
-                sh 'docker build -t $DOCKER_IMAGE .'
+                dir('.') { // ensure working directory is repo root
+                    sh "docker build -t ${IMAGE_NAME}:latest ."
+                }
             }
         }
 
         stage('Push to DockerHub') {
             steps {
-                withCredentials([usernamePassword(credentialsId: 'dockerhub-login', usernameVariable: 'DOCKER_USER', passwordVariable: 'DOCKER_PASS')]) {
-                    sh 'echo $DOCKER_PASS | docker login -u $DOCKER_USER --password-stdin'
-                    sh 'docker push $DOCKER_IMAGE'
+                dir('.') {
+                    sh "echo $DOCKERHUB_CREDENTIALS_PSW | docker login -u $DOCKERHUB_CREDENTIALS_USR --password-stdin"
+                    sh "docker tag ${IMAGE_NAME}:latest <your-dockerhub-username>/${IMAGE_NAME}:latest"
+                    sh "docker push <your-dockerhub-username>/${IMAGE_NAME}:latest"
                 }
             }
         }
 
         stage('Deploy to EKS') {
             steps {
-                sh 'kubectl apply -f k8s/trend-deployment.yaml'
-                sh 'kubectl apply -f k8s/trend-service.yaml'
+                dir('.') {
+                    sh "kubectl apply -f k8s/deployment.yaml"
+                    sh "kubectl apply -f k8s/service.yaml"
+                }
             }
         }
     }
 
     post {
-        success {
-            echo '✅ Deployment Successful'
-        }
         failure {
             echo '❌ Deployment Failed'
         }
+        success {
+            echo '✅ Deployment Succeeded'
+        }
     }
 }
+
 
 
 
