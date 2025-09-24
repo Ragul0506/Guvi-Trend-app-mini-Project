@@ -2,67 +2,72 @@ pipeline {
     agent any
 
     environment {
-        // Jenkins credentials IDs
-        DOCKERHUB_CREDENTIALS = credentials('dockerhub-cred-id')   // DockerHub credentials
-        GITHUB_CREDENTIALS = 'github-cred-id'                      // GitHub credentials if repo is private
-
-        IMAGE_NAME = 'trend-app'
-        DOCKERHUB_REPO = 'sarwanragul/trend-app'
-        K8S_MANIFEST_DIR = 'k8s'  // Directory containing deployment.yaml & service.yaml
+        // DockerHub credentials stored in Jenkins
+        DOCKERHUB_CREDENTIALS = credentials('dockerhub-cred-id') 
+        IMAGE_NAME = 'sarwanragul/trend-app:latest'
+        AWS_REGION = 'ap-south-1'
+        EKS_CLUSTER = 'trend-eks-cluster'
+        K8S_DIR = 'k8s'
     }
 
     stages {
-        stage('Checkout') {
+
+        stage('Checkout SCM') {
             steps {
-                git branch: 'main',
-                    url: 'https://github.com/Ragul0506/Guvi-Trend-app-mini-Project.git',
-                    credentialsId: GITHUB_CREDENTIALS
+                checkout scm
             }
         }
 
         stage('Build Docker Image') {
             steps {
-                dir('.') { // Ensure current directory is repo root
-                    sh "docker build -t ${IMAGE_NAME}:latest ."
-                }
+                sh """
+                    docker build -t trend-app:latest .
+                """
             }
         }
 
         stage('Push to DockerHub') {
             steps {
-                dir('.') {
-                    // Login to DockerHub
-                    sh "echo $DOCKERHUB_CREDENTIALS_PSW | docker login -u $DOCKERHUB_CREDENTIALS_USR --password-stdin"
-                    
-                    // Tag image for DockerHub
-                    sh "docker tag ${IMAGE_NAME}:latest ${DOCKERHUB_REPO}:latest"
-                    
-                    // Push image
-                    sh "docker push ${DOCKERHUB_REPO}:latest"
+                withCredentials([usernamePassword(credentialsId: 'dockerhub-cred-id', 
+                                                 passwordVariable: 'DOCKERHUB_PSW', 
+                                                 usernameVariable: 'DOCKERHUB_USER')]) {
+                    sh """
+                        echo $DOCKERHUB_PSW | docker login -u $DOCKERHUB_USER --password-stdin
+                        docker tag trend-app:latest $IMAGE_NAME
+                        docker push $IMAGE_NAME
+                    """
                 }
             }
         }
 
         stage('Deploy to EKS') {
             steps {
-                dir('.') {
-                    // Apply Kubernetes manifests
-                    sh "kubectl apply -f ${K8S_MANIFEST_DIR}/deployment.yaml"
-                    sh "kubectl apply -f ${K8S_MANIFEST_DIR}/service.yaml"
+                // AWS credentials stored in Jenkins
+                withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', 
+                                  credentialsId: 'aws-eks-cred']]) {
+                    sh """
+                        # Update kubeconfig to talk to EKS
+                        aws eks update-kubeconfig --region $AWS_REGION --name $EKS_CLUSTER
+                        
+                        # Apply Kubernetes manifests
+                        kubectl apply -f $K8S_DIR/deployment.yaml
+                        kubectl apply -f $K8S_DIR/service.yaml
+                    """
                 }
             }
         }
     }
 
     post {
-        failure {
-            echo '❌ Deployment Failed'
-        }
         success {
-            echo '✅ Deployment Succeeded'
+            echo "✅ Deployment succeeded!"
+        }
+        failure {
+            echo "❌ Deployment failed!"
         }
     }
 }
+
 
 
 
