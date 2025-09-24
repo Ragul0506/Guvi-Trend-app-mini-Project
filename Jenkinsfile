@@ -3,6 +3,7 @@ pipeline {
     environment {
         DOCKERHUB_CREDENTIALS = credentials('dockerhub-cred-id')
         IMAGE_NAME = 'trend-app'
+        DOCKERHUB_REPO = 'sarwanragul/trend-app'
     }
     stages {
         stage('Checkout') {
@@ -24,9 +25,14 @@ pipeline {
         stage('Push to DockerHub') {
             steps {
                 dir('.') {
+                    // Login to DockerHub using credentials
                     sh "echo $DOCKERHUB_CREDENTIALS_PSW | docker login -u $DOCKERHUB_CREDENTIALS_USR --password-stdin"
-                    sh "docker tag ${IMAGE_NAME}:latest <your-dockerhub-username>/${IMAGE_NAME}:latest"
-                    sh "docker push <your-dockerhub-username>/${IMAGE_NAME}:latest"
+                    
+                    // Tag the image for DockerHub
+                    sh "docker tag ${IMAGE_NAME}:latest ${DOCKERHUB_REPO}:latest"
+                    
+                    // Push image to DockerHub
+                    sh "docker push ${DOCKERHUB_REPO}:latest"
                 }
             }
         }
@@ -34,6 +40,7 @@ pipeline {
         stage('Deploy to EKS') {
             steps {
                 dir('.') {
+                    // Apply Kubernetes manifests
                     sh "kubectl apply -f k8s/deployment.yaml"
                     sh "kubectl apply -f k8s/service.yaml"
                 }
@@ -50,6 +57,7 @@ pipeline {
         }
     }
 }
+
 
 
 
