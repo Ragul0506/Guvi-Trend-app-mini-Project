@@ -2,51 +2,46 @@ pipeline {
     agent any
 
     environment {
-        DOCKERHUB_CREDENTIALS = credentials('dockerhub-cred-id')
+        DOCKERHUB_CREDENTIALS = credentials('dockerhub-credentials')
         DOCKER_IMAGE = "sarwanragul/trend-app:latest"
-        KUBECONFIG = '/home/ubuntu/.kube/config'   // EC2 kubeconfig path
     }
 
     stages {
-        stage('Clone Repo') {
+        stage('Checkout') {
             steps {
-                git url: 'https://github.com/Ragul0506/Guvi-Trend-app-mini-Project.git', branch: 'main'
+                git branch: 'main', url: 'https://github.com/Ragul0506/Guvi-Trend-app-mini-Project.git'
             }
         }
 
         stage('Build Docker Image') {
             steps {
-                sh """
-                docker build -t $DOCKER_IMAGE .
-                """
+                sh 'docker build -t $DOCKER_IMAGE .'
             }
         }
 
         stage('Push to DockerHub') {
             steps {
-                sh """
-                echo $DOCKERHUB_CREDENTIALS_PSW | docker login -u $DOCKERHUB_CREDENTIALS_USR --password-stdin
-                docker push $DOCKER_IMAGE
-                """
+                withCredentials([usernamePassword(credentialsId: 'dockerhub-credentials', usernameVariable: 'DOCKER_USER', passwordVariable: 'DOCKER_PASS')]) {
+                    sh 'echo $DOCKER_PASS | docker login -u $DOCKER_USER --password-stdin'
+                    sh 'docker push $DOCKER_IMAGE'
+                }
             }
         }
 
         stage('Deploy to EKS') {
             steps {
-                sh """
-                kubectl apply -f trend-deployment.yaml
-                kubectl apply -f trend-service.yaml
-                """
+                sh 'kubectl apply -f terraform-infra/trend-deployment.yaml'
+                sh 'kubectl apply -f terraform-infra/trend-service.yaml'
             }
         }
     }
 
     post {
         success {
-            echo 'Deployment Successful ✅'
+            echo '✅ Deployment Successful!'
         }
         failure {
-            echo 'Deployment Failed ❌'
+            echo '❌ Deployment Failed'
         }
     }
 }
